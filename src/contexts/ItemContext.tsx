@@ -1,0 +1,54 @@
+import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
+
+export interface Item {
+  id: string;
+  itemName: string;
+  price: number;
+}
+
+interface ItemContextType {
+  items: Item[];
+  addItem: (item: Item) => void;
+  deleteItem: (id: string) => void;
+}
+
+const ItemContext = createContext<ItemContextType | undefined>(undefined);
+
+const sampleItems: Item[] = [
+  { id: '1', itemName: 'Photoshop Editing', price: 500 },
+  { id: '2', itemName: 'Banner Design', price: 1200 },
+  { id: '3', itemName: 'Video Color Grading', price: 2500 },
+];
+
+export function ItemProvider({ children }: { children: ReactNode }) {
+  const [items, setItems] = useState<Item[]>(() => {
+    const saved = localStorage.getItem('billing_items');
+    return saved ? JSON.parse(saved) : sampleItems;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('billing_items', JSON.stringify(items));
+  }, [items]);
+
+  const addItem = useCallback((item: Item) => {
+    setItems(prev => [item, ...prev]);
+  }, []);
+
+  const deleteItem = useCallback((id: string) => {
+    setItems(prev => prev.filter(i => i.id !== id));
+  }, []);
+
+  return (
+    <ItemContext.Provider value={{ items, addItem, deleteItem }}>
+      {children}
+    </ItemContext.Provider>
+  );
+}
+
+export function useItems() {
+  const context = useContext(ItemContext);
+  if (context === undefined) {
+    throw new Error('useItems must be used within a ItemProvider');
+  }
+  return context;
+}

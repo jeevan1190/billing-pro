@@ -1,0 +1,617 @@
+import { useState, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { useInvoices, type InvoiceItem, type Invoice, type PaymentEntry } from '@/contexts/InvoiceContext';
+import { useItems } from '@/contexts/ItemContext';
+import { Plus, Trash2, FileText, Globe, Lock } from 'lucide-react';
+import InvoicePreview from '@/components/InvoicePreview';
+import { cn } from '@/lib/utils';
+
+const fmt = (n: number) => '₹' + n.toLocaleString('en-IN', { minimumFractionDigits: 2 });
+
+export default function CreateBill() {
+  const navigate = useNavigate();
+  const { id } = useParams();
+  const { addInvoice, updateInvoice, invoices } = useInvoices();
+  const { items: availableItems } = useItems();
+
+  const [customerName, setCustomerName] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [customerEmail, setCustomerEmail] = useState('');
+  const [previewInvoice, setPreviewInvoice] = useState<Invoice | null>(null);
+  const [items, setItems] = useState<InvoiceItem[]>([{ name: '', quantity: 1, price: 0 }]);
+  const [discountType, setDiscountType] = useState<'percent' | 'fixed'>('percent');
+  const [discountValue, setDiscountValue] = useState(0);
+  const [gstEnabled, setGstEnabled] = useState(true);
+  const [invoiceNumberInput, setInvoiceNumberInput] = useState('');
+  const [description, setDescription] = useState('');
+  const [cashAmount, setCashAmount] = useState(0);
+  const [onlineAmount, setOnlineAmount] = useState(0);
+  const [advanceAmount, setAdvanceAmount] = useState(0);
+  const [advanceMethod, setAdvanceMethod] = useState<'cash' | 'online'>('cash');
+
+  const [showCashInput, setShowCashInput] = useState(true);
+  const [showOnlineInput, setShowOnlineInput] = useState(false);
+  const [showAdvanceInput, setShowAdvanceInput] = useState(false);
+  const [showRemaining, setShowRemaining] = useState(false);
+  const [receivedAmount, setReceivedAmount] = useState<number | ''>('');
+  const [isPrivate, setIsPrivate] = useState(false);
+
+  const [error, setError] = useState('');
+  const [paymentHistory, setPaymentHistory] = useState<PaymentEntry[]>([]);
+
+  const existingInvoice = invoices.find(inv => inv.id === id);
+
+  useEffect(() => {
+    if (id && existingInvoice) {
+      setInvoiceNumberInput(existingInvoice.invoiceNumber);
+      setCustomerName(existingInvoice.customerName);
+      setCustomerPhone(existingInvoice.customerPhone || '');
+      setCustomerEmail(existingInvoice.customerEmail || '');
+      setItems(existingInvoice.items);
+      setDiscountType(existingInvoice.discount > 0 && existingInvoice.subtotal > 0 && Math.abs((existingInvoice.discount / existingInvoice.subtotal) * 100 - Math.round((existingInvoice.discount / existingInvoice.subtotal) * 100)) > 0.1 ? 'fixed' : 'percent');
+
+      const percentValue = existingInvoice.subtotal > 0 ? (existingInvoice.discount / existingInvoice.subtotal) * 100 : 0;
+      setDiscountValue(existingInvoice.discount > 0 && existingInvoice.subtotal > 0 && Math.abs(percentValue - Math.round(percentValue)) > 0.1 ? existingInvoice.discount : Math.round(percentValue));
+
+      setGstEnabled(existingInvoice.gstEnabled);
+      setDescription(existingInvoice.description || '');
+      setCashAmount(existingInvoice.cashAmount || 0);
+      setOnlineAmount(existingInvoice.onlineAmount || 0);
+      setAdvanceAmount(existingInvoice.advanceAmount || 0);
+      setAdvanceMethod(existingInvoice.advanceMethod || 'cash');
+      setIsPrivate(existingInvoice.isPrivate || false);
+
+      let history = existingInvoice.paymentHistory || [];
+      if (!existingInvoice.paymentHistory && (existingInvoice.cashAmount > 0 || existingInvoice.onlineAmount > 0)) {
+        const autoHistory: PaymentEntry[] = [];
+        let rCash = existingInvoice.cashAmount || 0;
+        let rOnline = existingInvoice.onlineAmount || 0;
+        if (existingInvoice.advanceAmount > 0) {
+          autoHistory.push({ id: crypto.randomUUID(), date: existingInvoice.createdAt, amount: existingInvoice.advanceAmount, method: existingInvoice.advanceMethod, note: 'Advance Phase' });
+          if (existingInvoice.advanceMethod === 'cash') rCash -= existingInvoice.advanceAmount;
+          if (existingInvoice.advanceMethod === 'online') rOnline -= existingInvoice.advanceAmount;
+        }
+        if (rCash > 0) autoHistory.push({ id: crypto.randomUUID(), date: existingInvoice.createdAt, amount: rCash, method: 'cash', note: 'Initial Cash' });
+        if (rOnline > 0) autoHistory.push({ id: crypto.randomUUID(), date: existingInvoice.createdAt, amount: rOnline, method: 'online', note: 'Initial Online' });
+        history = autoHistory;
+      }
+      setPaymentHistory(history);
+    } else if (!id) {
+      // Auto-generate for new bills with current month prefix
+      const monthNames = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+      const currentMonth = monthNames[new Date().getMonth()];
+      setInvoiceNumberInput(`${currentMonth}-${String(invoices.length + 1).padStart(3, '0')}`);
+    }
+  }, [id, existingInvoice, invoices.length]);
+
+  const updateItem = (index: number, field: keyof InvoiceItem, value: string | number) => {
+    const newItems = [...items];
+    newItems[index] = { ...newItems[index], [field]: value };
+    setItems(newItems);
+  };
+
+  const handleItemSelect = (index: number, selectedName: string) => {
+    const selectedItem = availableItems.find(i => i.itemName === selectedName);
+    const newItems = [...items];
+    if (selectedItem) {
+      newItems[index] = { ...newItems[index], name: selectedItem.itemName, price: selectedItem.price };
+    } else {
+      // If "Custom Service" or an empty option is selected, clear the price
+      newItems[index] = { ...newItems[index], name: selectedName, price: selectedName === 'Custom Service' ? 0 : newItems[index].price };
+    }
+    setItems(newItems);
+  };
+
+  const addItem = () => setItems(prev => [...prev, { name: '', quantity: 1, price: 0 }]);
+  const removeItem = (index: number) => {
+    if (items.length > 1) setItems(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const subtotal = items.reduce((s, item) => s + (item.quantity || 0) * (item.price || 0), 0);
+  const discount = discountType === 'percent' ? (subtotal * Math.max(0, discountValue)) / 100 : Math.max(0, discountValue);
+  const taxableAmount = Math.max(0, subtotal - discount);
+  const gstAmount = gstEnabled ? taxableAmount * 0.18 : 0;
+  const totalAmount = taxableAmount + gstAmount;
+  const remainingAmount = Math.max(0, totalAmount - cashAmount - onlineAmount);
+  const paymentStatus: 'completed' | 'pending' = remainingAmount <= 0 ? 'completed' : 'pending';
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+
+    if (!invoiceNumberInput.trim()) { setError('Invoice Number is required'); return; }
+    if (!customerName.trim()) { setError('Customer name is required'); return; }
+    if (items.some(i => !i.name.trim() || i.quantity <= 0 || i.price <= 0)) {
+      setError('All items must have a name, quantity > 0, and price > 0'); return;
+    }
+
+    let finalHistory = paymentHistory;
+    if (!existingInvoice) {
+      finalHistory = [];
+      if (showAdvanceInput && advanceAmount > 0) {
+        finalHistory.push({ id: crypto.randomUUID(), date: new Date().toISOString(), amount: advanceAmount, method: advanceMethod, note: 'Advance Phase' });
+      }
+      const rCash = (showCashInput ? cashAmount : 0) - (advanceMethod === 'cash' && showAdvanceInput ? advanceAmount : 0);
+      if (rCash > 0) finalHistory.push({ id: crypto.randomUUID(), date: new Date().toISOString(), amount: rCash, method: 'cash', note: 'Initial Cash' });
+      const rOnline = (showOnlineInput ? onlineAmount : 0) - (advanceMethod === 'online' && showAdvanceInput ? advanceAmount : 0);
+      if (rOnline > 0) finalHistory.push({ id: crypto.randomUUID(), date: new Date().toISOString(), amount: rOnline, method: 'online', note: 'Initial Online' });
+    }
+
+    const newInvoice: Invoice = {
+      id: existingInvoice ? existingInvoice.id : crypto.randomUUID(),
+      invoiceNumber: invoiceNumberInput.trim(),
+      customerName: customerName.trim(),
+      customerPhone: customerPhone.trim(),
+      customerEmail: customerEmail.trim(),
+      description: description.trim(),
+      items,
+      subtotal,
+      discount,
+      taxableAmount,
+      gstEnabled,
+      gstAmount,
+      totalAmount,
+      cashAmount: existingInvoice ? cashAmount : (showCashInput ? cashAmount : 0),
+      onlineAmount: existingInvoice ? onlineAmount : (showOnlineInput ? onlineAmount : 0),
+      advanceAmount: existingInvoice ? advanceAmount : (showAdvanceInput ? advanceAmount : 0),
+      advanceMethod,
+      remainingAmount,
+      paymentStatus,
+      paymentHistory: finalHistory,
+      isPrivate,
+      createdAt: existingInvoice ? existingInvoice.createdAt : new Date().toISOString(),
+    };
+
+    if (existingInvoice) {
+      updateInvoice(newInvoice);
+    } else {
+      addInvoice(newInvoice);
+      // Automatically send "Thank you" SMS on new bill generation
+      if (newInvoice.customerPhone) {
+        const text = 'Thank you for visiting our photo studio. Please visit again!';
+        const phone = newInvoice.customerPhone.replace(/\D/g, '');
+        const finalPhone = phone.length === 10 ? '91' + phone : phone;
+        window.open(`https://wa.me/${finalPhone}?text=${encodeURIComponent(text)}`, '_blank');
+      }
+    }
+    setPreviewInvoice(newInvoice);
+  };
+
+  return (
+    <div className="max-w-6xl mx-auto">
+      <div className="mb-8 animate-fade-up">
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">{id ? 'Edit Bill' : 'Create Bill'}</h1>
+        <p className="text-sm text-muted-foreground mt-1">{id ? 'Modify existing invoice details' : 'Generate a new invoice for your customer'}</p>
+      </div>
+
+      <form onSubmit={handleSubmit} className="animate-fade-up" style={{ animationDelay: '100ms' }}>
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 items-start">
+          {/* Main Content Area (Form Fields) */}
+          <div className="lg:col-span-3 space-y-6">
+            {/* Customer Info */}
+            <div className="bg-card rounded-xl border border-border/50 shadow-card p-6 space-y-4" style={{ borderColor: isPrivate ? 'rgba(239,68,68,0.3)' : undefined, background: isPrivate ? 'linear-gradient(135deg, hsl(var(--card)) 0%, rgba(239,68,68,0.03) 100%)' : undefined }}>
+              <div className="flex items-center justify-between">
+                <h2 className="font-semibold text-card-foreground flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-muted-foreground" /> Customer Details
+                </h2>
+
+                {/* Public / Private Toggle */}
+                <div className="flex items-center gap-1 p-1 bg-muted rounded-xl border border-border/30">
+                  <button
+                    type="button"
+                    onClick={() => setIsPrivate(false)}
+                    className={cn(
+                      'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all duration-300',
+                      !isPrivate
+                        ? 'bg-card text-emerald-600 shadow-sm border border-emerald-500/20'
+                        : 'text-muted-foreground hover:text-foreground'
+                    )}
+                  >
+                    <Globe className="w-3 h-3" /> Public
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsPrivate(true)}
+                    className={cn(
+                      'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all duration-300',
+                      isPrivate
+                        ? 'bg-red-600 text-white shadow-md shadow-red-500/30'
+                        : 'text-muted-foreground hover:text-red-500'
+                    )}
+                  >
+                    <Lock className="w-3 h-3" /> Private
+                  </button>
+                </div>
+              </div>
+
+              {isPrivate && (
+                <div className="flex items-center gap-2 px-3 py-2 bg-red-500/5 border border-red-500/20 rounded-xl animate-fade-up">
+                  <Lock className="w-3 h-3 text-red-400 shrink-0" />
+                  <p className="text-[10px] font-bold text-red-500">This bill will be saved as Private — hidden from dashboard, reports &amp; public lists.</p>
+                </div>
+              )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1.5" id="invoice-number-label">Invoice Bill No *</label>
+                  <input
+                    type="text" value={invoiceNumberInput} onChange={e => setInvoiceNumberInput(e.target.value)}
+                    className="w-full px-3 py-2.5 rounded-lg border border-input bg-background/50 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-shadow font-medium"
+                    placeholder="e.g. APR-001"
+                    aria-labelledby="invoice-number-label"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1.5" id="customer-name-label">Customer Name *</label>
+                  <input
+                    type="text" value={customerName} onChange={e => setCustomerName(e.target.value)}
+                    className="w-full px-3 py-2.5 rounded-lg border border-input bg-background/50 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-shadow"
+                    placeholder="Enter customer name"
+                    aria-labelledby="customer-name-label"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1.5" id="customer-phone-label">Phone (Optional)</label>
+                  <input
+                    type="text" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)}
+                    className="w-full px-3 py-2.5 rounded-lg border border-input bg-background/50 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-shadow"
+                    placeholder="Phone number"
+                    aria-labelledby="customer-phone-label"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1.5" id="customer-email-label">Email (Optional)</label>
+                  <input
+                    type="email" value={customerEmail} onChange={e => setCustomerEmail(e.target.value)}
+                    className="w-full px-3 py-2.5 rounded-lg border border-input bg-background/50 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-shadow"
+                    placeholder="Email address"
+                    aria-labelledby="customer-email-label"
+                  />
+                </div>
+              </div>
+              <div className="mt-2">
+                <label className="block text-sm font-medium text-foreground mb-1.5" id="description-label">Description (Optional)</label>
+                <textarea
+                  value={description}
+                  onChange={e => setDescription(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-lg border border-input bg-background/50 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-shadow"
+                  placeholder="Add extra details or notes"
+                  rows={2}
+                  aria-labelledby="description-label"
+                />
+              </div>
+            </div>
+
+            {/* Line Items */}
+            <div className="bg-card rounded-xl border border-border/50 shadow-card p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="font-semibold text-card-foreground text-lg">Line Items</h2>
+                <button type="button" onClick={addItem} className="inline-flex items-center gap-1.5 text-sm font-bold text-primary hover:opacity-80 transition-all bg-primary/10 px-4 py-2 rounded-lg">
+                  <Plus className="w-4 h-4" /> Add Item
+                </button>
+              </div>
+              <div className="space-y-3">
+                {items.map((item, idx) => (
+                  <div key={idx} className="grid grid-cols-[1fr_70px_100px_40px] gap-3 items-end p-3 rounded-xl bg-muted/20 border border-border/30">
+                    <div>
+                      {idx === 0 && <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Service</label>}
+                      <select value={item.name} onChange={e => handleItemSelect(idx, e.target.value)} className="w-full px-3 py-2 rounded-lg border border-input bg-background/80 text-sm">
+                        <option value="" disabled>Select</option>
+                        {availableItems.map(ai => <option key={ai.id} value={ai.itemName}>{ai.itemName}</option>)}
+                        <option value="Custom Service">Custom Service</option>
+                      </select>
+                    </div>
+                    <div>
+                      {idx === 0 && <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Qty</label>}
+                      <input type="number" min={1} value={item.quantity} onChange={e => updateItem(idx, 'quantity', Number(e.target.value))} className="w-full px-3 py-2 rounded-lg border border-input text-sm" />
+                    </div>
+                    <div>
+                      {idx === 0 && <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Price</label>}
+                      <input type="number" min={0} value={item.price} onChange={e => updateItem(idx, 'price', Number(e.target.value))} className="w-full px-3 py-2 rounded-lg border border-input text-sm" />
+                    </div>
+                    <button type="button" onClick={() => removeItem(idx)} className="h-9 w-9 flex items-center justify-center rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive"><Trash2 className="w-4 h-4" /></button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Adjustments & Totals Row */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-20">
+              <div className="bg-card rounded-xl border border-border/50 shadow-card p-6 space-y-6">
+                <h3 className="font-bold text-card-foreground text-sm uppercase tracking-wider">Payment Settings</h3>
+                <div className="space-y-4">
+                  <div className="flex flex-col gap-2">
+                    <label className="text-xs font-bold text-muted-foreground">DISCOUNT</label>
+                    <div className="flex rounded-lg overflow-hidden border border-input">
+                      <select value={discountType} onChange={e => setDiscountType(e.target.value as 'percent' | 'fixed')} className="bg-muted px-2 py-2 text-xs font-bold border-r border-input outline-none">
+                        <option value="percent">%</option>
+                        <option value="fixed">₹</option>
+                      </select>
+                      <input type="number" value={discountValue || ''} onChange={e => setDiscountValue(Number(e.target.value))} className="w-full px-3 py-2 text-sm outline-none" placeholder="0" />
+                    </div>
+                  </div>
+                  <label className="flex items-center gap-3 p-3 rounded-lg border border-border/50 bg-muted/20 cursor-pointer group">
+                    <input type="checkbox" checked={gstEnabled} onChange={e => setGstEnabled(e.target.checked)} className="rounded text-primary w-4 h-4" />
+                    <span className="font-bold text-xs">Apply GST (18%)</span>
+                  </label>
+                  <div className="flex flex-col gap-2">
+                    <label className="text-xs font-bold text-muted-foreground">PAYMENT STATUS (AUTO)</label>
+                    <div className={cn(
+                      "w-full px-3 py-2 rounded-lg border text-sm font-bold capitalize cursor-default",
+                      paymentStatus === 'completed' 
+                        ? "bg-success/10 border-success/20 text-success" 
+                        : "bg-destructive/10 border-destructive/20 text-destructive"
+                    )}>
+                      {paymentStatus}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-border/50 space-y-4">
+                  {!id ? (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <button type="button" onClick={() => setShowCashInput(!showCashInput)} className={cn("px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter border", showCashInput ? "bg-primary/10 border-primary/20 text-primary" : "bg-muted text-muted-foreground")}>Cash</button>
+                        <button type="button" onClick={() => setShowOnlineInput(!showOnlineInput)} className={cn("px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter border", showOnlineInput ? "bg-primary/10 border-primary/20 text-primary" : "bg-muted text-muted-foreground")}>Online</button>
+                        <button type="button" onClick={() => setShowAdvanceInput(!showAdvanceInput)} className={cn("px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter border", showAdvanceInput ? "bg-primary/10 border-primary/20 text-primary" : "bg-muted text-muted-foreground")}>Advance</button>
+                      </div>
+                      <div className="space-y-3">
+                        {showCashInput && <div className="space-y-1"><label className="text-[10px] font-bold text-muted-foreground">CASH AMOUNT</label><input type="number" value={cashAmount || ''} onChange={e => setCashAmount(Number(e.target.value))} className="w-full px-3 py-2 rounded-lg border bg-muted/30 text-sm font-bold" /></div>}
+                        {showOnlineInput && <div className="space-y-1"><label className="text-[10px] font-bold text-muted-foreground">ONLINE AMOUNT</label><input type="number" value={onlineAmount || ''} onChange={e => setOnlineAmount(Number(e.target.value))} className="w-full px-3 py-2 rounded-lg border bg-muted/30 text-sm font-bold" /></div>}
+                        {showAdvanceInput && (
+                          <div className="p-3 bg-primary/5 border border-primary/20 rounded-xl space-y-2">
+                            <div className="flex justify-between items-center"><span className="text-[10px] font-black text-primary">ADVANCE</span><div className="flex bg-muted p-0.5 rounded gap-1"><button type="button" onClick={() => { if (advanceMethod === 'online' && advanceAmount > 0) { setOnlineAmount(prev => Math.max(0, prev - advanceAmount)); setCashAmount(prev => prev + advanceAmount); } setAdvanceMethod('cash'); }} className={cn("px-2 py-0.5 text-[8px] font-bold rounded", advanceMethod === 'cash' ? "bg-background text-primary" : "text-muted-foreground")}>CASH</button><button type="button" onClick={() => { if (advanceMethod === 'cash' && advanceAmount > 0) { setCashAmount(prev => Math.max(0, prev - advanceAmount)); setOnlineAmount(prev => prev + advanceAmount); } setAdvanceMethod('online'); }} className={cn("px-2 py-0.5 text-[8px] font-bold rounded", advanceMethod === 'online' ? "bg-background text-primary" : "text-muted-foreground")}>ONLINE</button></div></div>
+                            <input type="number" value={advanceAmount || ''} onChange={e => { const val = Number(e.target.value); const diff = val - advanceAmount; setAdvanceAmount(val); if (advanceMethod === 'cash') { setCashAmount(prev => prev + diff); } else { setOnlineAmount(prev => prev + diff); } }} className="w-full px-3 py-1.5 bg-background border rounded text-xs font-black" />
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="space-y-4 animate-fade-in">
+                      <h4 className="text-[10px] font-black text-foreground uppercase tracking-widest bg-muted py-1.5 px-3 rounded-lg inline-block">Payment History</h4>
+                      <div className="space-y-2">
+                        {paymentHistory.map(ph => (
+                          <div key={ph.id} className="flex flex-col p-2.5 rounded-lg border border-border/50 bg-background/50">
+                            <div className="flex items-center justify-between">
+                              <span className="font-black text-xs">{fmt(ph.amount)}</span>
+                              <span className={cn("text-[8px] font-black uppercase px-2 py-0.5 rounded-full", ph.method === 'cash' ? "bg-emerald-500/10 text-emerald-600" : "bg-blue-500/10 text-blue-600")}>{ph.method}</span>
+                            </div>
+                            <div className="flex items-center justify-between mt-1 text-[10px] text-muted-foreground font-medium">
+                              <span>{new Date(ph.date).toLocaleDateString()}</span>
+                              <span>{ph.note}</span>
+                            </div>
+                          </div>
+                        ))}
+                        {paymentHistory.length === 0 && <p className="text-[10px] text-muted-foreground italic px-1">No tracked payments prior.</p>}
+                      </div>
+
+                      {remainingAmount > 0 && (
+                        <div className="mt-4 p-3 border border-primary/20 bg-primary/5 rounded-xl space-y-3">
+                          <p className="text-[10px] font-black text-primary uppercase">Record New Payment</p>
+                          <div className="flex gap-2">
+                            <input type="number" id="newPayAmount" defaultValue={remainingAmount} className="w-full px-3 py-2 text-sm font-bold border rounded-lg" />
+                            <select id="newPayMethod" className="px-2 py-2 text-sm font-bold border rounded-lg w-24 flex-shrink-0">
+                              <option value="cash">Cash</option>
+                              <option value="online">Online</option>
+                            </select>
+                          </div>
+                          <button type="button" onClick={() => {
+                            const amtInput = document.getElementById('newPayAmount') as HTMLInputElement;
+                            const methInput = document.getElementById('newPayMethod') as HTMLSelectElement;
+                            const amt = Number(amtInput.value);
+                            const meth = methInput.value as 'cash' | 'online';
+                            if (amt > 0) {
+                              const newEntry: PaymentEntry = { id: crypto.randomUUID(), amount: amt, method: meth, date: new Date().toISOString(), note: 'Add-on Payment' };
+                              setPaymentHistory(prev => [...prev, newEntry]);
+                              if (meth === 'cash') setCashAmount(prev => prev + amt);
+                              if (meth === 'online') setOnlineAmount(prev => prev + amt);
+                              amtInput.value = String(Math.max(0, remainingAmount - amt));
+                            }
+                          }} className="w-full py-2 bg-primary text-primary-foreground text-[10px] font-black uppercase tracking-widest rounded-lg hover:opacity-90 transition-opacity">
+                            Add Payment
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="bg-card rounded-xl border border-border/50 shadow-card p-6 flex flex-col justify-between">
+                <div className="space-y-3">
+                  <div className="flex justify-between text-xs text-muted-foreground font-bold"><span>SUBTOTAL</span><span className="tabular-nums">{fmt(subtotal)}</span></div>
+                  {discount > 0 && <div className="flex justify-between text-xs font-bold text-success"><span>DISCOUNT</span><span className="tabular-nums">-{fmt(discount)}</span></div>}
+                  {gstEnabled && <div className="flex justify-between text-xs text-muted-foreground font-bold"><span>GST (18%)</span><span className="tabular-nums">{fmt(gstAmount)}</span></div>}
+                  <div className="pt-4 border-t border-border/50 flex justify-between items-end">
+                    <span className="text-xs font-black text-primary uppercase">Grand Total</span>
+                    <span className="text-2xl font-black text-primary tabular-nums tracking-tighter leading-none">{fmt(totalAmount)}</span>
+                  </div>
+                  {remainingAmount > 0 && (
+                    <div className="mt-4 p-3 rounded-lg bg-destructive border border-destructive/20 text-white flex justify-between items-center">
+                      <span className="text-[10px] font-black uppercase">Balance Due</span>
+                      <span className="text-lg font-black tabular-nums">{fmt(remainingAmount)}</span>
+                    </div>
+                  )}
+                </div>
+                
+                <div className="pt-6">
+                  {error && <p className="text-[10px] font-bold text-destructive mb-3">{error}</p>}
+                  <button type="submit" className="w-full py-4 rounded-xl bg-primary text-primary-foreground font-black text-xs uppercase tracking-widest hover:opacity-90 transition-all shadow-xl shadow-primary/20 flex items-center justify-center gap-3">
+                    <FileText className="w-4 h-4" /> {id ? 'Update Bill' : 'Generate Bill'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Sticky Calculator Column */}
+          <div className="lg:sticky lg:top-8 space-y-6">
+            <div className="p-5 rounded-2xl bg-indigo-600 text-white shadow-xl shadow-indigo-200 animate-fade-in ring-4 ring-indigo-50 border-2 border-indigo-400/20">
+              <h4 className="text-[10px] font-black uppercase tracking-[0.2em] mb-4 opacity-80 flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                Live Change Calculator
+              </h4>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-xs font-bold opacity-90">Amount Received from Customer</label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-indigo-200">₹</span>
+                    <input 
+                      type="number"
+                      value={receivedAmount}
+                      onChange={(e) => setReceivedAmount(e.target.value === '' ? '' : Number(e.target.value))}
+                      placeholder="0.00"
+                      className="w-full pl-8 pr-4 py-3 rounded-xl bg-indigo-500/50 border border-indigo-400 placeholder:text-indigo-300 text-white font-black text-lg focus:outline-none focus:ring-2 focus:ring-white/30 tabular-nums transition-all"
+                    />
+                  </div>
+                </div>
+
+                {receivedAmount !== '' && (
+                  <div className="pt-2 space-y-1 group">
+                    <div className="flex justify-between text-[10px] font-black uppercase tracking-widest opacity-80 group-hover:opacity-100 transition-opacity">
+                      <span>Return to Customer</span>
+                      {Number(receivedAmount) < totalAmount && <span className="text-rose-300 animate-bounce">Partial Payment!</span>}
+                    </div>
+                    <div className="text-3xl font-black tabular-nums tracking-tighter">
+                      {fmt(Math.max(0, Number(receivedAmount) - totalAmount))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="p-4 rounded-xl bg-card border border-border/50 text-center space-y-2">
+               <p className="text-[10px] font-bold text-muted-foreground uppercase">Note</p>
+               <p className="text-[11px] text-muted-foreground/80 leading-relaxed">
+                  Use the calculator above to quickly calculate return change for cash payments.
+               </p>
+            </div>
+          </div>
+        </div>
+      </form>
+
+      {/* Terms & Conditions Note Panel */}
+      <div className="mt-8 animate-fade-up" style={{ animationDelay: '200ms' }}>
+        <div className="relative rounded-3xl overflow-hidden border border-amber-500/20 shadow-2xl shadow-amber-500/10">
+          {/* Gradient top bar */}
+          <div className="h-1.5 w-full bg-gradient-to-r from-amber-400 via-orange-400 to-rose-400" />
+
+          <div className="bg-gradient-to-br from-amber-50/60 via-orange-50/30 to-rose-50/20 dark:from-amber-950/20 dark:via-orange-950/10 dark:to-rose-950/10 p-6 sm:p-10">
+            {/* Header */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-8">
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-xl shadow-amber-500/30 shrink-0">
+                <span className="text-2xl">📋</span>
+              </div>
+              <div>
+                <h3 className="font-black text-xl sm:text-2xl tracking-tight text-foreground leading-tight">
+                  अटी व शर्ती
+                </h3>
+                <p className="text-sm font-bold text-amber-600 dark:text-amber-400 mt-1">
+                  Terms &amp; Conditions — Please read carefully
+                </p>
+              </div>
+              <div className="sm:ml-auto shrink-0 px-4 py-2 rounded-full bg-amber-500/10 border border-amber-500/20">
+                <p className="text-[11px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400">4 Rules</p>
+              </div>
+            </div>
+
+            {/* Rules Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              {[
+                {
+                  num: '01',
+                  icon: '🖼️',
+                  english: 'No photos will be delivered without receipt.',
+                  marathi: 'पावती शिवाय फोटो दिले जाणार नाहीत.',
+                  bg: 'bg-blue-50 dark:bg-blue-950/30',
+                  border: 'border-blue-200 dark:border-blue-800/50',
+                  iconBg: 'bg-blue-100 dark:bg-blue-900/50',
+                  numColor: 'text-blue-400',
+                  accent: 'bg-blue-500',
+                },
+                {
+                  num: '02',
+                  icon: '💳',
+                  english: 'Photos will not be processed without full payment.',
+                  marathi: 'पूर्ण रक्कम भरल्याशिवाय फोटो तयार केले जाणार नाहीत.',
+                  bg: 'bg-emerald-50 dark:bg-emerald-950/30',
+                  border: 'border-emerald-200 dark:border-emerald-800/50',
+                  iconBg: 'bg-emerald-100 dark:bg-emerald-900/50',
+                  numColor: 'text-emerald-400',
+                  accent: 'bg-emerald-500',
+                },
+                {
+                  num: '03',
+                  icon: '🔧',
+                  english: 'If photos are defective due to technical issues, they will be retaken.',
+                  marathi: 'तांत्रिक कारणामुळे फोटो खराब झाल्यास, फोटो पुन्हा काढून दिले जातील.',
+                  bg: 'bg-violet-50 dark:bg-violet-950/30',
+                  border: 'border-violet-200 dark:border-violet-800/50',
+                  iconBg: 'bg-violet-100 dark:bg-violet-900/50',
+                  numColor: 'text-violet-400',
+                  accent: 'bg-violet-500',
+                },
+                {
+                  num: '04',
+                  icon: '📅',
+                  english: 'Photos must be collected within one month; we are not responsible after that.',
+                  marathi: 'फोटो एका महिन्याच्या आत घेऊन जावेत; त्यानंतर आम्ही जबाबदार राहणार नाही.',
+                  bg: 'bg-rose-50 dark:bg-rose-950/30',
+                  border: 'border-rose-200 dark:border-rose-800/50',
+                  iconBg: 'bg-rose-100 dark:bg-rose-900/50',
+                  numColor: 'text-rose-400',
+                  accent: 'bg-rose-500',
+                },
+              ].map(rule => (
+                <div
+                  key={rule.num}
+                  className={`relative flex flex-col gap-4 p-5 sm:p-6 rounded-2xl ${rule.bg} ${rule.border} border-2 transition-all hover:scale-[1.012] hover:shadow-lg duration-300 overflow-hidden`}
+                >
+                  {/* Accent bar left */}
+                  <div className={`absolute left-0 top-4 bottom-4 w-1 rounded-r-full ${rule.accent}`} />
+
+                  {/* Top row: icon + number */}
+                  <div className="flex items-center justify-between pl-3">
+                    <div className={`w-11 h-11 rounded-xl ${rule.iconBg} flex items-center justify-center text-2xl shadow-sm`}>
+                      {rule.icon}
+                    </div>
+                    <span className={`text-4xl font-black ${rule.numColor} opacity-20 leading-none select-none`}>
+                      {rule.num}
+                    </span>
+                  </div>
+
+                  {/* Text — Marathi BIG and bold, English below */}
+                  <div className="pl-3 space-y-2">
+                    <p className="text-base sm:text-[1.1rem] font-black text-foreground leading-snug">
+                      {rule.marathi}
+                    </p>
+                    <p className="text-sm text-muted-foreground font-semibold leading-relaxed">
+                      {rule.english}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Footer line */}
+            <div className="mt-5 pt-4 border-t border-amber-500/10 flex items-center gap-2">
+              <div className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                या अटी स्वीकारून आपण बिल तयार करत आहात · By generating this bill, you accept these terms
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {previewInvoice && (
+        <InvoicePreview
+          invoice={previewInvoice}
+          onClose={() => {
+            setPreviewInvoice(null);
+            navigate('/sales-history');
+          }}
+        />
+      )}
+    </div>
+  );
+}
