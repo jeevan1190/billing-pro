@@ -6,6 +6,7 @@ interface MetricCardProps {
   icon: React.ReactNode;
   accent?: 'primary' | 'success' | 'warning' | 'destructive';
   delay?: number;
+  onClick?: () => void;
 }
 
 const accentMap = {
@@ -15,10 +16,14 @@ const accentMap = {
   destructive: 'bg-destructive/10 text-destructive',
 };
 
-export default function MetricCard({ title, value, icon, accent = 'primary', delay = 0 }: MetricCardProps) {
+export default function MetricCard({ title, value, icon, accent = 'primary', delay = 0, onClick }: MetricCardProps) {
   return (
     <div
-      className="group relative overflow-hidden bg-white/60 backdrop-blur-xl rounded-2xl border border-white/80 p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all duration-300 animate-fade-up hover:-translate-y-1"
+      onClick={onClick}
+      className={cn(
+        "group relative overflow-hidden bg-white/60 backdrop-blur-xl rounded-2xl border border-white/80 p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all duration-300 animate-fade-up hover:-translate-y-1",
+        onClick && "cursor-pointer hover:border-primary/30"
+      )}
       style={{ animationDelay: `${delay}ms` }}
     >
       <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none transform translate-x-4 -translate-y-4 group-hover:scale-110 group-hover:rotate-12 transition-transform duration-500">

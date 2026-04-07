@@ -121,6 +121,7 @@ export default function CreateBill() {
 
     if (!invoiceNumberInput.trim()) { setError('Invoice Number is required'); return; }
     if (!customerName.trim()) { setError('Customer name is required'); return; }
+    if (!customerPhone.trim()) { setError('Customer mobile number is required'); return; }
     if (items.some(i => !i.name.trim() || i.quantity <= 0 || i.price <= 0)) {
       setError('All items must have a name, quantity > 0, and price > 0'); return;
     }
@@ -250,7 +251,7 @@ export default function CreateBill() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-1.5" id="customer-phone-label">Phone (Optional)</label>
+                  <label className="block text-sm font-medium text-foreground mb-1.5" id="customer-phone-label">Phone No *</label>
                   <input
                     type="text" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)}
                     className="w-full px-3 py-2.5 rounded-lg border border-input bg-background/50 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-shadow"

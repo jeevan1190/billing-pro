@@ -2,7 +2,7 @@ import AppSidebar from './AppSidebar';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-screen w-full bg-[#f8fafc] relative overflow-hidden">
+    <div className="flex h-screen w-full bg-[#f8fafc] relative overflow-hidden">
       {/* Premium subtle background glow for the main app area */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-pink-100/50 rounded-full blur-3xl opacity-60 -translate-y-1/2 translate-x-1/3" />

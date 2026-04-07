@@ -10,6 +10,7 @@ interface ItemContextType {
   items: Item[];
   addItem: (item: Item) => void;
   deleteItem: (id: string) => void;
+  updateItem: (item: Item) => void;
 }
 
 const ItemContext = createContext<ItemContextType | undefined>(undefined);
@@ -38,8 +39,12 @@ export function ItemProvider({ children }: { children: ReactNode }) {
     setItems(prev => prev.filter(i => i.id !== id));
   }, []);
 
+  const updateItem = useCallback((updatedItem: Item) => {
+    setItems(prev => prev.map(i => i.id === updatedItem.id ? updatedItem : i));
+  }, []);
+
   return (
-    <ItemContext.Provider value={{ items, addItem, deleteItem }}>
+    <ItemContext.Provider value={{ items, addItem, deleteItem, updateItem }}>
       {children}
     </ItemContext.Provider>
   );

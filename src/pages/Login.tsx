@@ -151,7 +151,7 @@ export default function Login() {
 
             <motion.button
               variants={itemVariants}
-              whileHover={{ scale: 1.02, boxShadow: "0 10px 25px -5px rgba(236, 72, 153, 0.4)" }}
+              whileHover={{ scale: 1.02, boxShadow: "0 10px 25px -5px rgba(230, 37, 76, 0.73)" }}
               whileTap={{ scale: 0.98 }}
               type="submit"
               disabled={loading}

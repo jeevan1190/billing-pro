@@ -5,7 +5,7 @@ import {
   BarChart3, ShoppingCart, ClipboardList, Users2, Package, Tags,
   IndianRupee, UserPlus, Settings, UserCircle, LogOut, Zap, ChevronDown,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 
 interface MenuItem {
@@ -72,6 +72,14 @@ const sectionColors: Record<string, {
     activeBg:   'bg-red-50 border-l-2 border-red-500',
     hoverBg:    'hover:bg-red-50',
   },
+  'Expenses': {
+    gradient:   'from-indigo-500 to-blue-600',
+    badge:      'bg-indigo-50 text-indigo-600 border-indigo-200',
+    iconColor:  'text-indigo-500',
+    activeGlow: 'shadow-[0_0_12px_hsl(220_80%_60%/0.2)]',
+    activeBg:   'bg-indigo-50 border-l-2 border-indigo-500',
+    hoverBg:    'hover:bg-indigo-50',
+  },
 };
 
 const menu: { section: string; items: MenuItem[] }[] = [
@@ -109,6 +117,12 @@ const menu: { section: string; items: MenuItem[] }[] = [
     ],
   },
   {
+    section: 'Expenses',
+    items: [
+      { label: 'Add Expenses', icon: IndianRupee, path: '/add-expenses' },
+    ],
+  },
+  {
     section: 'System',
     items: [
       { label: 'User Profile', icon: UserCircle, path: '/profile' },
@@ -120,15 +134,24 @@ export default function AppSidebar() {
   const location = useLocation();
   const navigate  = useNavigate();
   const { logout, user } = useAuth();
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const activeSection = useMemo(() => {
+    const found = menu.find(group => group.items.some(item => item.path === location.pathname));
+    return found ? found.section : 'Main';
+  }, [location.pathname]);
+
+  const [openSection, setOpenSection] = useState<string | null>(activeSection);
+
+  useEffect(() => {
+    setOpenSection(activeSection);
+  }, [activeSection]);
 
   const toggleSection = (section: string) => {
-    setCollapsed(prev => ({ ...prev, [section]: !prev[section] }));
+    setOpenSection(prev => (prev === section ? null : section));
   };
 
   return (
     <aside
-      className="w-[258px] min-h-screen flex flex-col shrink-0 no-print relative overflow-hidden"
+      className="w-[258px] h-full flex flex-col shrink-0 no-print relative overflow-hidden"
       style={{
         background: 'linear-gradient(160deg, #fff5f8 0%, #ffffff 40%, #f0fdf4 100%)',
         borderRight: '1px solid hsl(330 20% 90%)',
@@ -176,7 +199,7 @@ export default function AppSidebar() {
         </div>
         <div>
           <span
-            className="font-extrabold text-base tracking-tight"
+            className="font-extrabold text-xl tracking-tight"
             style={{
               background: 'linear-gradient(90deg, hsl(330 80% 50%), hsl(270 70% 55%), hsl(140 60% 40%))',
               WebkitBackgroundClip: 'text',
@@ -185,7 +208,7 @@ export default function AppSidebar() {
           >
             PhotoBill Pro
           </span>
-          <p className="text-[10px] leading-none mt-0.5 text-slate-500">
+          <p className="text-xs leading-none mt-0.5 text-slate-500">
             Billing Manager
           </p>
         </div>
@@ -212,7 +235,7 @@ export default function AppSidebar() {
                   />
                   <span
                     className={cn(
-                      'text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full border',
+                      'text-xs font-bold uppercase tracking-widest px-2 py-0.5 rounded-full border',
                       sc.badge,
                     )}
                   >
@@ -221,14 +244,14 @@ export default function AppSidebar() {
                 </div>
                 <ChevronDown
                   className={cn(
-                    'w-3 h-3 text-slate-400 transition-transform duration-300',
-                    collapsed[group.section] && '-rotate-90',
+                    'w-4 h-4 text-slate-400 transition-transform duration-300',
+                    openSection !== group.section && '-rotate-90',
                   )}
                 />
               </button>
 
               {/* Menu items */}
-              {!collapsed[group.section] && (
+              {openSection === group.section && (
                 <ul className="space-y-0.5">
                   {group.items.map((item, ii) => {
                     const active = location.pathname === item.path;
@@ -237,7 +260,7 @@ export default function AppSidebar() {
                         <button
                           onClick={() => item.path && navigate(item.path)}
                           className={cn(
-                            'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all duration-200 group',
+                            'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-base transition-all duration-200 group',
                             active
                               ? cn('font-semibold text-slate-900', sc.activeBg, sc.activeGlow)
                               : cn('text-slate-600 hover:text-slate-900', sc.hoverBg),
@@ -246,14 +269,14 @@ export default function AppSidebar() {
                           {/* Icon wrapper */}
                           <span
                             className={cn(
-                              'w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-all',
+                              'w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-all',
                               active
                                 ? 'bg-white shadow-sm'
                                 : 'bg-slate-100/50 group-hover:bg-white group-hover:shadow-sm',
                             )}
                           >
                             <item.icon
-                              className={cn('w-3.5 h-3.5', sc.iconColor)}
+                              className={cn('w-4 h-4', sc.iconColor)}
                             />
                           </span>
                           <span className="truncate">{item.label}</span>
@@ -296,9 +319,9 @@ export default function AppSidebar() {
             {user?.name?.[0]?.toUpperCase() ?? 'A'}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-slate-800 truncate">{user?.name}</p>
+            <p className="text-base font-semibold text-slate-800 truncate">{user?.name}</p>
             <p
-              className="text-[10px] font-medium"
+              className="text-xs font-medium"
               style={{
                 background: 'linear-gradient(90deg, hsl(330 80% 50%), hsl(270 70% 55%))',
                 WebkitBackgroundClip: 'text',
@@ -313,10 +336,10 @@ export default function AppSidebar() {
         {/* Logout */}
         <button
           onClick={logout}
-          className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-all duration-200 group text-slate-600 hover:text-red-500 hover:bg-red-50"
+          className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-base transition-all duration-200 group text-slate-600 hover:text-red-500 hover:bg-red-50"
         >
-          <span className="w-7 h-7 rounded-lg bg-slate-100/50 group-hover:bg-red-100 flex items-center justify-center transition-colors">
-            <LogOut className="w-3.5 h-3.5 group-hover:text-red-500" />
+          <span className="w-8 h-8 rounded-lg bg-slate-100/50 group-hover:bg-red-100 flex items-center justify-center transition-colors">
+            <LogOut className="w-4 h-4 group-hover:text-red-500" />
           </span>
           <span className="font-medium">Logout</span>
         </button>

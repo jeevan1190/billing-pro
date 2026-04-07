@@ -20,6 +20,7 @@ import PurchaseEntry from "./pages/PurchaseEntry";
 import PurchaseHistory from "./pages/PurchaseHistory";
 import ManageItems from "./pages/ManageItems";
 import CustomerList from "./pages/CustomerList";
+import AddExpenses from "./pages/AddExpenses";
 import PlaceholderPage from "./pages/PlaceholderPage";
 import NotFound from "./pages/NotFound";
 
@@ -56,6 +57,7 @@ const App = () => (
               <Route path="/purchase-history" element={<ProtectedLayout><PurchaseHistory /></ProtectedLayout>} />
               <Route path="/items" element={<ProtectedLayout><ManageItems /></ProtectedLayout>} />
               <Route path="/customers" element={<ProtectedLayout><CustomerList /></ProtectedLayout>} />
+              <Route path="/add-expenses" element={<ProtectedLayout><AddExpenses /></ProtectedLayout>} />
               
               <Route path="/reports" element={<ProtectedLayout><PlaceholderPage title="Payment Reports" /></ProtectedLayout>} />
               <Route path="/suppliers" element={<ProtectedLayout><PlaceholderPage title="Suppliers" /></ProtectedLayout>} />

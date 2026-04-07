@@ -2,11 +2,13 @@ import { useInvoices } from '@/contexts/InvoiceContext';
 import MetricCard from '@/components/MetricCard';
 import { IndianRupee, FileText, TrendingUp, Wallet, ArrowUpRight, CheckCircle2, Clock } from 'lucide-react';
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from 'recharts';
+import { useNavigate } from 'react-router-dom';
 
 const fmt = (n: number) => '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
 
 export default function Dashboard() {
   const { invoices } = useInvoices();
+  const navigate = useNavigate();
 
   // Only show public data on the dashboard
   const publicInvoices = invoices.filter(i => !i.isPrivate);
@@ -57,12 +59,12 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6 mb-10">
-        <MetricCard title="Total Revenue" value={fmt(totalRevenue)} icon={<IndianRupee className="w-5 h-5" />} accent="primary" delay={0} />
-        <MetricCard title="Completed Amount" value={fmt(paidAmount)} icon={<CheckCircle2 className="w-5 h-5" />} accent="success" delay={40} />
-        <MetricCard title="Pending Amount" value={fmt(unpaidAmount)} icon={<Clock className="w-5 h-5" />} accent="warning" delay={80} />
-        <MetricCard title="Total Expenses" value={fmt(totalExpenses)} icon={<Wallet className="w-5 h-5" />} accent="destructive" delay={120} />
-        <MetricCard title="Net Profit" value={fmt(netProfit)} icon={<TrendingUp className="w-5 h-5" />} accent="success" delay={160} />
-        <MetricCard title="Total Invoices" value={String(publicInvoices.length)} icon={<FileText className="w-5 h-5" />} accent="primary" delay={200} />
+        <MetricCard title="Total Revenue" value={fmt(totalRevenue)} icon={<IndianRupee className="w-5 h-5" />} accent="primary" delay={0} onClick={() => navigate('/sales-history')} />
+        <MetricCard title="Completed Amount" value={fmt(paidAmount)} icon={<CheckCircle2 className="w-5 h-5" />} accent="success" delay={40} onClick={() => navigate('/sales-history')} />
+        <MetricCard title="Pending Amount" value={fmt(unpaidAmount)} icon={<Clock className="w-5 h-5" />} accent="warning" delay={80} onClick={() => navigate('/sales-history')} />
+        <MetricCard title="Total Expenses" value={fmt(totalExpenses)} icon={<Wallet className="w-5 h-5" />} accent="destructive" delay={120} onClick={() => navigate('/purchase-history')} />
+        <MetricCard title="Net Profit" value={fmt(netProfit)} icon={<TrendingUp className="w-5 h-5" />} accent="success" delay={160} onClick={() => navigate('/daily-report')} />
+        <MetricCard title="Total Invoices" value={String(publicInvoices.length)} icon={<FileText className="w-5 h-5" />} accent="primary" delay={200} onClick={() => navigate('/all-bills')} />
       </div>
 
       {/* Monthly Profit Graph */}
