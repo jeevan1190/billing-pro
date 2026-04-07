@@ -134,20 +134,6 @@ export default function AppSidebar() {
   const location = useLocation();
   const navigate  = useNavigate();
   const { logout, user } = useAuth();
-  const activeSection = useMemo(() => {
-    const found = menu.find(group => group.items.some(item => item.path === location.pathname));
-    return found ? found.section : 'Main';
-  }, [location.pathname]);
-
-  const [openSection, setOpenSection] = useState<string | null>(activeSection);
-
-  useEffect(() => {
-    setOpenSection(activeSection);
-  }, [activeSection]);
-
-  const toggleSection = (section: string) => {
-    setOpenSection(prev => (prev === section ? null : section));
-  };
 
   return (
     <aside
@@ -215,86 +201,51 @@ export default function AppSidebar() {
       </div>
 
       {/* ── Navigation ── */}
-      <nav className="relative flex-1 overflow-y-auto py-4 px-3 space-y-4"
-        style={{ scrollbarWidth: 'thin', scrollbarColor: 'hsl(330 20% 80%) transparent' }}
-      >
+      <nav className="relative flex-1 overflow-hidden py-2 px-3 flex flex-col gap-1">
         {menu.map((group, gi) => {
           const sc = sectionColors[group.section] ?? sectionColors['System'];
           return (
-            <div key={group.section} style={{ animation: `slideIn 0.4s ease both ${gi * 60}ms` }}>
-              {/* Section header */}
-              <button
-                onClick={() => toggleSection(group.section)}
-                className="flex items-center justify-between w-full px-2 mb-1.5 group"
-              >
-                <div className="flex items-center gap-2">
-                  {/* Colored dot */}
-                  <span
-                    className="w-1.5 h-1.5 rounded-full shrink-0"
-                    style={{ background: `linear-gradient(135deg, ${sc.gradient.split(' ')[1]}, ${sc.gradient.split(' ')[3]})` }}
-                  />
-                  <span
-                    className={cn(
-                      'text-xs font-bold uppercase tracking-widest px-2 py-0.5 rounded-full border',
-                      sc.badge,
-                    )}
-                  >
-                    {group.section}
-                  </span>
-                </div>
-                <ChevronDown
-                  className={cn(
-                    'w-4 h-4 text-slate-400 transition-transform duration-300',
-                    openSection !== group.section && '-rotate-90',
-                  )}
-                />
-              </button>
+            <ul key={group.section} className="flex flex-col gap-1">
+              {group.items.map((item, ii) => {
+                const active = location.pathname === item.path;
+                return (
+                  <li key={item.label} style={{ animation: `slideIn 0.35s ease both ${(gi * 2 + ii) * 40}ms` }}>
+                    <button
+                      onClick={() => item.path && navigate(item.path)}
+                      className={cn(
+                        'w-full flex items-center gap-3 px-3 py-1.5 rounded-xl text-[15px] transition-all duration-200 group',
+                        active
+                          ? cn('font-semibold text-slate-900', sc.activeBg, sc.activeGlow)
+                          : cn('text-slate-600 hover:text-slate-900', sc.hoverBg),
+                      )}
+                    >
+                      {/* Icon wrapper */}
+                      <span
+                        className={cn(
+                          'w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-all',
+                          active
+                            ? 'bg-white shadow-sm'
+                            : 'bg-slate-100/50 group-hover:bg-white group-hover:shadow-sm',
+                        )}
+                      >
+                        <item.icon
+                          className={cn('w-4 h-4', sc.iconColor)}
+                        />
+                      </span>
+                      <span className="truncate">{item.label}</span>
 
-              {/* Menu items */}
-              {openSection === group.section && (
-                <ul className="space-y-0.5">
-                  {group.items.map((item, ii) => {
-                    const active = location.pathname === item.path;
-                    return (
-                      <li key={item.label} style={{ animation: `slideIn 0.35s ease both ${ii * 40}ms` }}>
-                        <button
-                          onClick={() => item.path && navigate(item.path)}
-                          className={cn(
-                            'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-base transition-all duration-200 group',
-                            active
-                              ? cn('font-semibold text-slate-900', sc.activeBg, sc.activeGlow)
-                              : cn('text-slate-600 hover:text-slate-900', sc.hoverBg),
-                          )}
-                        >
-                          {/* Icon wrapper */}
-                          <span
-                            className={cn(
-                              'w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-all',
-                              active
-                                ? 'bg-white shadow-sm'
-                                : 'bg-slate-100/50 group-hover:bg-white group-hover:shadow-sm',
-                            )}
-                          >
-                            <item.icon
-                              className={cn('w-4 h-4', sc.iconColor)}
-                            />
-                          </span>
-                          <span className="truncate">{item.label}</span>
-
-                          {/* Active pill dot */}
-                          {active && (
-                            <span
-                              className={cn("ml-auto w-1.5 h-1.5 rounded-full shrink-0", sc.iconColor.replace('text-', 'bg-'))}
-                              style={{ boxShadow: '0 0 4px currentColor' }}
-                            />
-                          )}
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </div>
+                      {/* Active pill dot */}
+                      {active && (
+                        <span
+                          className={cn("ml-auto w-1.5 h-1.5 rounded-full shrink-0", sc.iconColor.replace('text-', 'bg-'))}
+                          style={{ boxShadow: '0 0 4px currentColor' }}
+                        />
+                      )}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
           );
         })}
       </nav>
