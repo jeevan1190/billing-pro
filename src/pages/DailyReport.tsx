@@ -10,6 +10,10 @@ const fmt = (n: number) => '₹' + n.toLocaleString('en-IN', { minimumFractionDi
 export default function DailyReport() {
   const { invoices } = useInvoices();
   const { purchases, addPurchase } = usePurchases();
+  const [expenses, setExpenses] = useState(() => {
+    const saved = localStorage.getItem('billing_expenses');
+    return saved ? JSON.parse(saved) : [];
+  });
   const [selectedMonth, setSelectedMonth] = useState(() => new Date().toISOString().substring(0, 7)); // YYYY-MM
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [viewMode, setViewMode] = useState<'daily' | 'monthly'>('daily');
@@ -40,6 +44,7 @@ export default function DailyReport() {
     // Filter by selected month
     const monthInvoices = invoices.filter(inv => inv.createdAt.startsWith(selectedMonth));
     const monthPurchases = purchases.filter(pur => pur.date.startsWith(selectedMonth));
+    const monthExpenses = expenses.filter((exp: any) => exp.date.startsWith(selectedMonth));
 
     monthInvoices.forEach(inv => {
       const date = inv.createdAt.split('T')[0];
@@ -53,6 +58,12 @@ export default function DailyReport() {
       daysInMonth[date].costing += (pur.totalAmount || 0);
     });
 
+    monthExpenses.forEach((exp: any) => {
+      const date = exp.date;
+      if (!daysInMonth[date]) daysInMonth[date] = { collections: 0, costing: 0, profit: 0 };
+      daysInMonth[date].costing += (exp.amount || 0);
+    });
+
     // Calculate profit for each day
     Object.keys(daysInMonth).forEach(date => {
       daysInMonth[date].profit = daysInMonth[date].collections - daysInMonth[date].costing;
@@ -61,7 +72,7 @@ export default function DailyReport() {
     return Object.entries(daysInMonth)
       .map(([date, data]) => ({ date, ...data }))
       .sort((a, b) => b.date.localeCompare(a.date));
-  }, [invoices, purchases, selectedMonth]);
+  }, [invoices, purchases, expenses, selectedMonth]);
 
   const monthlyTotals = useMemo(() => {
     return monthlyBreakdown.reduce((sum, day) => ({
@@ -74,18 +85,20 @@ export default function DailyReport() {
   const publicDailyStats = useMemo(() => {
     const dailyInvoices = invoices.filter(inv => inv.createdAt.startsWith(selectedDate) && !inv.isPrivate);
     const dailyPurchases = purchases.filter(pur => pur.date.startsWith(selectedDate));
+    const dailyExpenses = expenses.filter((exp: any) => exp.date === selectedDate);
     const collections = dailyInvoices.reduce((sum, inv) => sum + (inv.cashAmount || 0) + (inv.onlineAmount || 0), 0);
-    const costing = dailyPurchases.reduce((sum, pur) => sum + (pur.totalAmount || 0), 0);
-    return { collections, costing, profit: collections - costing, invoiceCount: dailyInvoices.length, purchaseCount: dailyPurchases.length, invoices: dailyInvoices, purchases: dailyPurchases };
-  }, [invoices, purchases, selectedDate]);
+    const costing = dailyPurchases.reduce((sum, pur) => sum + (pur.totalAmount || 0), 0) + dailyExpenses.reduce((sum: number, exp: any) => sum + (exp.amount || 0), 0);
+    return { collections, costing, profit: collections - costing, invoiceCount: dailyInvoices.length, purchaseCount: dailyPurchases.length + dailyExpenses.length, invoices: dailyInvoices, purchases: dailyPurchases, expenses: dailyExpenses };
+  }, [invoices, purchases, expenses, selectedDate]);
 
   const privateDailyStats = useMemo(() => {
     const dailyInvoices = invoices.filter(inv => inv.createdAt.startsWith(selectedDate) && inv.isPrivate);
     const dailyPurchases = purchases.filter(pur => pur.date.startsWith(selectedDate));
+    const dailyExpenses = expenses.filter((exp: any) => exp.date === selectedDate);
     const collections = dailyInvoices.reduce((sum, inv) => sum + (inv.cashAmount || 0) + (inv.onlineAmount || 0), 0);
-    const costing = dailyPurchases.reduce((sum, pur) => sum + (pur.totalAmount || 0), 0);
-    return { collections, costing, profit: collections - costing, invoiceCount: dailyInvoices.length, purchaseCount: dailyPurchases.length, invoices: dailyInvoices, purchases: dailyPurchases };
-  }, [invoices, purchases, selectedDate]);
+    const costing = dailyPurchases.reduce((sum, pur) => sum + (pur.totalAmount || 0), 0) + dailyExpenses.reduce((sum: number, exp: any) => sum + (exp.amount || 0), 0);
+    return { collections, costing, profit: collections - costing, invoiceCount: dailyInvoices.length, purchaseCount: dailyPurchases.length + dailyExpenses.length, invoices: dailyInvoices, purchases: dailyPurchases, expenses: dailyExpenses };
+  }, [invoices, purchases, expenses, selectedDate]);
 
   // dailyStats kept for backward compatibility
   const dailyStats = publicDailyStats;
@@ -105,8 +118,12 @@ export default function DailyReport() {
       const d = p.date;
       return d >= start && d <= end;
     });
+    const filteredExpenses = expenses.filter((e: any) => {
+      const d = e.date;
+      return d >= start && d <= end;
+    });
 
-    if (filteredInvoices.length === 0 && filteredPurchases.length === 0) {
+    if (filteredInvoices.length === 0 && filteredPurchases.length === 0 && filteredExpenses.length === 0) {
       toast.error("No data found for the selected range");
       return;
     }
@@ -129,7 +146,10 @@ export default function DailyReport() {
     filteredPurchases.forEach(pur => {
       csvContent += `${pur.date},${pur.itemName},${pur.supplierName},${pur.totalAmount}\n`;
     });
-    const totalCost = filteredPurchases.reduce((s, p) => s + p.totalAmount, 0);
+    filteredExpenses.forEach((exp: any) => {
+      csvContent += `${exp.date},${exp.description},Expense Area,${exp.amount}\n`;
+    });
+    const totalCost = filteredPurchases.reduce((s, p) => s + p.totalAmount, 0) + filteredExpenses.reduce((s: number, e: any) => s + e.amount, 0);
     csvContent += `TOTAL COSTING,,,${totalCost}\n\n`;
 
     csvContent += `FINAL SUMMARY\n`;
@@ -188,15 +208,22 @@ export default function DailyReport() {
     e.preventDefault();
     if (!newItemName || !newItemPrice) return;
 
-    addPurchase({
+    const newExpense = {
       id: crypto.randomUUID(),
-      itemName: newItemName,
-      supplierName: 'Manual Entry',
-      quantity: 1,
-      price: Number(newItemPrice),
-      totalAmount: Number(newItemPrice),
-      date: selectedDate
-    });
+      date: selectedDate,
+      description: newItemName,
+      amount: Number(newItemPrice),
+      category: 'General'
+    };
+
+    const saved = localStorage.getItem('billing_expenses');
+    const existingExpenses = saved ? JSON.parse(saved) : [];
+    const updatedExpenses = [newExpense, ...existingExpenses];
+    
+    localStorage.setItem('billing_expenses', JSON.stringify(updatedExpenses));
+    setExpenses(updatedExpenses);
+    
+    toast.success('Cost recorded successfully as Expense');
 
     setNewItemName('');
     setNewItemPrice('');
@@ -872,6 +899,16 @@ export default function DailyReport() {
                                     <td className="p-4 font-black text-foreground">{pur.itemName}</td>
                                     <td className="p-4 text-muted-foreground font-medium">{pur.supplierName === 'Manual Entry' ? 'Daily Report' : pur.supplierName}</td>
                                     <td className="p-4 text-right font-black text-destructive tabular-nums">{fmt(pur.totalAmount)}</td>
+                                </tr>
+                            ))}
+                            {expenses.filter((e: any) => e.date.startsWith(selectedDate)).map((exp: any) => (
+                                <tr key={exp.id} className="border-b border-border/10 last:border-0 hover:bg-muted/10">
+                                    <td className="p-4 font-black text-foreground">{exp.description}</td>
+                                    <td className="p-4 text-muted-foreground font-medium flex items-center gap-2">
+                                        <span className="px-2 py-0.5 bg-muted rounded text-[10px] font-bold uppercase tracking-wider">{exp.category}</span>
+                                        Expense
+                                    </td>
+                                    <td className="p-4 text-right font-black text-destructive tabular-nums">{fmt(exp.amount)}</td>
                                 </tr>
                             ))}
                             {dailyStats.purchaseCount === 0 && (

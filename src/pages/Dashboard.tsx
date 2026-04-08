@@ -57,7 +57,7 @@ export default function Dashboard() {
       }
 
       data.push({
-        name: dayStr,
+        name: `${dateStr} ${dayStr}`,
         Cash: finalCash,
         Online: finalOnline,
       });

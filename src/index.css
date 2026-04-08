@@ -155,11 +155,21 @@
   background: hsl(var(--muted-foreground) / 0.5);
 }
 
+/* Remove number input arrows/scrollers globally */
+input[type=number]::-webkit-inner-spin-button, 
+input[type=number]::-webkit-outer-spin-button { 
+  -webkit-appearance: none; 
+  margin: 0; 
+}
+input[type=number] {
+  -moz-appearance: textfield; /* Firefox */
+}
+
 /* Print styles */
 @media print {
   @page {
     size: A4;
-    margin: 15mm;
+    margin: 10mm;
   }
   body {
     -webkit-print-color-adjust: exact !important;
@@ -173,6 +183,7 @@
   /* Crucial override: release any wrapper bounds, scale animations, or scroll traps so absolute elements map correctly */
   * {
     animation: none !important;
+    transition: none !important;
     transform: none !important;
     max-height: none !important;
     overflow: visible !important;
@@ -185,8 +196,6 @@
     left: 0 !important;
     top: 0 !important;
     width: 100% !important;
-    margin: 0 !important;
-    padding: 0 !important;
     background: transparent !important;
   }
   .no-print { display: none !important; }
